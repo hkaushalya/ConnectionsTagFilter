@@ -2,7 +2,8 @@ import os
 import json
 import operator
 #import spellcorrector
-import re, collections
+import re, collections      #for spell corrections
+from difflib import SequenceMatcher
 
 #from nltk.corpus import gutenberg
 
@@ -86,9 +87,86 @@ def GetData():
 
     return (data)
 
+####################################################
+# Find possible corrections and dump to a text file
+####################################################
+def FindCorrections(all_words_dic):
+    outfile = open("corrections.txt", "w")
+
+    for k, v in all_words_dic.items():
+        cw = correct(k)
+        m = SequenceMatcher(None, k, cw)
+        r = m.ratio()
+        msg = k + " -> " + cw + "[fuzz: " + str(r) + "]"
+
+        if k is cw:
+            #print("%s -> %s [fuzz: %f]" % (k, cw, r ))
+            #outfile.write("%s -> %s [fuzz: %f]\n" % (k, cw, r ))
+            #outfile.write(msg.decode('iso-8859-1').encode('utf-8'))
+            outfile.write(msg)
+            #continue
+        else:
+            print("[C] %s -> %s [fuzz: %f]" % (k, cw, r))
+            #outfile.write("[C] %s -> %s [fuzz: %f]\n" % (k, cw, m.ratio() ))
+            msg1 = "[C]" + msg
+            #outfile.write(msg1.decode('iso-8859-1').encode('utf-8'))
+            outfile.write(msg1)
+
+        
+    outfile.close()
+
+#################################################
+# Find Possible Duplicates
+#################################################
+def Duplicates(words_list):
+    outfile = open("duplicates.txt", "w")
+    MIN_MATCH_RATIO = 0.75          # Level of similarity to call a duplicate
+                                    # 0.75 is by trail and error
+    dups_dict = dict()
+    for w1 in sorted(words_list):
+        dups_dict[w1] = list()
+        
+        for w2 in words_list:
+            if w2 not in dups_dict.keys():
+                m = SequenceMatcher(None, w1, w2)
+                r = m.ratio()
+                if r > MIN_MATCH_RATIO:     # assume closely matching
+                    dups_dict[w1].append(w2)       
+                    msg = w1 + " -> " + w2 + "[fuzz: " + str(r) + "]"
+                    #print(msg)
+                    #outfile.write(msg)
+
+    count = 0
+    for k in sorted(dups_dict.keys()):
+        v = dups_dict[k]
+        if len(v)>0:
+            count += 1
+            print("--> %s : " % k, end="")
+            print (sorted(v))
+
+    print ("Possible duplicate words estimate: % i" % count)
+    #print(dups_dict)
+    outfile.close()
+    
+#####################################################
+#   Print Most Frequent Tags
+#####################################################
+def TopTen(words_dict):
+    sorted_word_list = sorted(words_dict.items(), key=operator.itemgetter(1), reverse=True)
+    #print (all_words_dic)
+    #print (sorted_word_list)
+    counter = 0
+    print (" ********* 10 most frequent tags (before corrections) ******** ")
+    for w in sorted_word_list:
+        print (w)
+        counter +=  1
+        if (counter >=10):
+            break
+    print (" ************************************************************* \n")
+
 
 #####################################################
-#       M   A   I   N
+#                 M   A   I   N
 #####################################################
 
 if __name__ == "__main__":
@@ -148,34 +226,17 @@ if __name__ == "__main__":
                             other_words_dic[t] = 1
                                   
     ###########  Now we have all the tags  ##############
-                            
-    sorted_word_list = sorted(all_words_dic.items(), key=operator.itemgetter(1), reverse=True)
-    #print (all_words_dic)
-    #print (sorted_word_list)
-    counter = 0
-    print (" ********* 10 most frequent tags ******** ")
-    for w in sorted_word_list:
-        print (w)
-        counter +=  1
-        if (counter >=10):
-            break
-    print (" **************************************** ")
-        
-    print("alpha_words: %d" % len(alpha_words_dic))
+
+    # Print Top Ten tags (before corrections)               
+    TopTen(all_words_dic)
+    #FindCorrections(list(all_words_dic.keys()))
+    Duplicates(all_words_dic.keys())    
+    #print("alpha_words: %d" % len(alpha_words_dic))
     #print(alpha_words_dic)
-    print("alphanum_words: %d" % len(alphanum_words_dic))
+    #print("alphanum_words: %d" % len(alphanum_words_dic))
     print(alphanum_words_dic)
-    print("hyp_words: %d" % len(hyp_words_dic))
+    #print("hyp_words: %d" % len(hyp_words_dic))
     #print(hyp_words_dic)
     print("Other words: %d" % len(other_words_dic))
     print(other_words_dic)
-
-
-    for k,v in all_words_dic.items():
-        cw = correct(k)
-        if k is cw:
-            continue
-        else:
-            print("%s -> %s" % (k, correct(k)))
-        
 
