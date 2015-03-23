@@ -1,3 +1,8 @@
+##############################################################
+# ToDo: We could have a seperate tag list that can be ignored.
+#
+##############################################################
+
 import os 
 import json
 import operator
@@ -19,7 +24,9 @@ def train(features):
 
 print ("Current Directory: %s " % os.getcwd())
 DICTIONARY_OF_WORDS_FILE = '../resources/big.txt'
-#NWORDS = train(words(file(DICTIONARY_OF_WORDS_FILE).read()))
+#DICTIONARY_OF_WORDS_FILE = '../resources/big.txt_v2'
+#DICTIONARY_OF_WORDS_FILE = '../resources/aa.txt'
+#NWORDS = train(words(file(DICTIONARY_OF_WORDS_FILE).read()))  # Depricated in Python 3.x
 NWORDS = train(words(open(DICTIONARY_OF_WORDS_FILE).read()))
 
 alphabet = 'abcdefghijklmnopqrstuvwxyz'
@@ -83,43 +90,53 @@ def GetData():
         
     print("%i lines of data in file %s" % (lines,  filename))
     fp.seek(0)                          # reset read head to start
-    data = json.loads(fp.read())        #this returns a list
+    data = json.loads(fp.read())        # this returns a list
 
     return (data)
 
 ####################################################
 # Find possible corrections and dump to a text file
 ####################################################
-def FindCorrections(all_words_dic):
+def FindCorrections(all_words_list):
     outfile = open("corrections.txt", "w")
-
-    for k, v in all_words_dic.items():
+    # tag words that had no corrections
+    # These can be correctly spelled words and
+    # special group of words (with accents etc) that
+    # the corpus has no suggestions for.
+    outfile_other = open("no_corrections.txt", "w")
+    
+    outfile.write(" WORD -> SUGGESTION  [FUZZINESS SCORE] \n")
+    for k in sorted(all_words_list):
         cw = correct(k)
+        # NB: words should be hashable for the sequence matcher to work
         m = SequenceMatcher(None, k, cw)
         r = m.ratio()
-        msg = k + " -> " + cw + "[fuzz: " + str(r) + "]"
+        msg = k + " -> " + cw + "\t [fuzz: " + str(round(r,2)) + "]"
 
         if k is cw:
             #print("%s -> %s [fuzz: %f]" % (k, cw, r ))
             #outfile.write("%s -> %s [fuzz: %f]\n" % (k, cw, r ))
             #outfile.write(msg.decode('iso-8859-1').encode('utf-8'))
-            outfile.write(msg)
-            #continue
+            #outfile.write(msg)
+            outfile_other.write(k + "\n")
         else:
             print("[C] %s -> %s [fuzz: %f]" % (k, cw, r))
             #outfile.write("[C] %s -> %s [fuzz: %f]\n" % (k, cw, m.ratio() ))
-            msg1 = "[C]" + msg
+            msg1 = "[C] " + msg + "\n"
             #outfile.write(msg1.decode('iso-8859-1').encode('utf-8'))
             outfile.write(msg1)
 
         
     outfile.close()
+    outfile_other.close()
 
 #################################################
 # Find Possible Duplicates
 #################################################
 def Duplicates(words_list):
     outfile = open("duplicates.txt", "w")
+    outfile_other = open("no_duplicates.txt", "w")
+    outfile.write(" WORD -> SUGGESTION/S \n")
     MIN_MATCH_RATIO = 0.75          # Level of similarity to call a duplicate
                                     # 0.75 is by trail and error
     dups_dict = dict()
@@ -128,25 +145,37 @@ def Duplicates(words_list):
         
         for w2 in words_list:
             if w2 not in dups_dict.keys():
+                # Automatics junk heurisitcs is disabled as we do not expect such
+                # NB: words should be hashable for sequence matching to work
                 m = SequenceMatcher(None, w1, w2)
                 r = m.ratio()
                 if r > MIN_MATCH_RATIO:     # assume closely matching
                     dups_dict[w1].append(w2)       
-                    msg = w1 + " -> " + w2 + "[fuzz: " + str(r) + "]"
+                    msg = w1 + " -> " + w2 + "[fuzz: " + str(round(r,2)) + "]"
                     #print(msg)
                     #outfile.write(msg)
 
     count = 0
     for k in sorted(dups_dict.keys()):
         v = dups_dict[k]
+        #outfile.write()
         if len(v)>0:
             count += 1
-            print("--> %s : " % k, end="")
-            print (sorted(v))
+            #print(" %s : " % v, end="")
+            #print (sorted(v))
+            m = SequenceMatcher(None, k, w2)
+            r = m.ratio()
+
+            msg = "[D] " + k + " -> "
+            msg += ", ".join(sorted(v)) + "\n"
+            outfile.write(msg)
+        else:
+            outfile_other.write(k + "\n")
 
     print ("Possible duplicate words estimate: % i" % count)
     #print(dups_dict)
     outfile.close()
+    outfile_other.close()
     
 #####################################################
 #   Print Most Frequent Tags
@@ -229,8 +258,9 @@ if __name__ == "__main__":
 
     # Print Top Ten tags (before corrections)               
     TopTen(all_words_dic)
-    #FindCorrections(list(all_words_dic.keys()))
-    Duplicates(all_words_dic.keys())    
+    FindCorrections(list(all_words_dic.keys()))
+    Duplicates(all_words_dic.keys())
+    
     #print("alpha_words: %d" % len(alpha_words_dic))
     #print(alpha_words_dic)
     #print("alphanum_words: %d" % len(alphanum_words_dic))
